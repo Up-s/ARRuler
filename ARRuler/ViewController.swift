@@ -10,65 +10,118 @@ import SceneKit
 import ARKit
 
 class ViewController: UIViewController, ARSCNViewDelegate {
-
-    @IBOutlet var sceneView: ARSCNView!
+  
+  // MARK: - Property
+  
+  @IBOutlet var sceneView: ARSCNView!
+  
+  private var nodeArray = [SCNNode]()
+  
+  
+  
+  // MARK: - Life Cycle
+  
+  override func viewDidLoad() {
+    super.viewDidLoad()
     
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        
-        // Set the view's delegate
-        sceneView.delegate = self
-        
-        // Show statistics such as fps and timing information
-        sceneView.showsStatistics = true
-        
-        // Create a new scene
-        let scene = SCNScene(named: "art.scnassets/ship.scn")!
-        
-        // Set the scene to the view
-        sceneView.scene = scene
-    }
+    // Set the view's delegate
+    self.sceneView.delegate = self
     
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        
-        // Create a session configuration
-        let configuration = ARWorldTrackingConfiguration()
-
-        // Run the view's session
-        sceneView.session.run(configuration)
-    }
+    self.sceneView.debugOptions = [ARSCNDebugOptions.showFeaturePoints]
+  }
+  
+  override func viewWillAppear(_ animated: Bool) {
+    super.viewWillAppear(animated)
     
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        
-        // Pause the view's session
-        sceneView.session.pause()
-    }
-
-    // MARK: - ARSCNViewDelegate
+    // Create a session configuration
+    let configuration = ARWorldTrackingConfiguration()
     
-/*
-    // Override to create and configure nodes for anchors added to the view's session.
-    func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
-        let node = SCNNode()
-     
-        return node
-    }
-*/
+    // Run the view's session
+    self.sceneView.session.run(configuration)
+  }
+  
+  override func viewWillDisappear(_ animated: Bool) {
+    super.viewWillDisappear(animated)
     
-    func session(_ session: ARSession, didFailWithError error: Error) {
-        // Present an error message to the user
-        
-    }
+    // Pause the view's session
+    self.sceneView.session.pause()
+  }
+  
+  
+  
+  // MARK: - Touch
+  
+  override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+    guard let touch = touches.first else { return }
+    let touchLocation = touch.location(in: self.sceneView)
     
-    func sessionWasInterrupted(_ session: ARSession) {
-        // Inform the user that the session has been interrupted, for example, by presenting an overlay
-        
-    }
+    guard let query = self.sceneView.raycastQuery(from: touchLocation, allowing: .estimatedPlane, alignment: .any) else { return }
+    let results = self.sceneView.session.raycast(query)
+    self.addDot(results)
+  }
+  
+  
+  
+  // MARK: - Action
+  
+  @IBAction func trashDidTap(_ sender: UIButton) {
+    self.nodeArray.forEach { $0.removeFromParentNode() }
+    self.nodeArray.removeAll()
+  }
+  
+  
+  
+  // MARK: - Interface
+  
+  private func addDot(_ results: [ARRaycastResult]) {
+    guard let hitResult = results.first else { return }
     
-    func sessionInterruptionEnded(_ session: ARSession) {
-        // Reset tracking and/or remove existing anchors if consistent tracking is required
-        
-    }
+    let meterial = SCNMaterial()
+    meterial.diffuse.contents = UIColor.red
+    
+    let dotGeometry = SCNSphere(radius: 0.005)
+    dotGeometry.materials = [meterial]
+    
+    let dotNode = SCNNode(geometry: dotGeometry)
+    dotNode.position = SCNVector3(
+      x: hitResult.worldTransform.columns.3.x,
+      y: hitResult.worldTransform.columns.3.y,
+      z: hitResult.worldTransform.columns.3.z
+    )
+    
+    self.sceneView.scene.rootNode.addChildNode(dotNode)
+    
+    self.nodeArray.append(dotNode)
+    
+    guard self.nodeArray.count >= 2 else { return }
+    
+    self.calculateNode()
+  }
+  
+  private func calculateNode() {
+    let start = self.nodeArray[0]
+    let end = self.nodeArray[1]
+    
+    let a = end.position.x - start.position.x
+    let b = end.position.y - start.position.y
+    let c = end.position.z - start.position.z
+    
+    let distance = sqrt(pow(a, 2) + pow(b, 2) + pow(c, 3))
+    self.updateText(distance: distance, position: end.position)
+  }
+  
+  private func updateText(distance: Float, position: SCNVector3) {
+    let text = "\(distance * 100)cm"
+    
+    let textGeometry = SCNText(string: text, extrusionDepth: 1.0)
+    textGeometry.firstMaterial?.diffuse.contents = UIColor.red
+    
+    let textNode = SCNNode (geometry: textGeometry)
+    textNode.position = SCNVector3(position.x, position.y + 0.01, position.z)
+    textNode.scale = SCNVector3(0.005, 0.005, 0.005)
+    
+    self.sceneView.scene.rootNode.addChildNode(textNode)
+    
+    self.nodeArray.append(textNode)
+  }
 }
